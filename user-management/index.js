@@ -16,61 +16,65 @@ const pool = new Pool({
 // Middleware to parse JSON requests
 app.use(express.json());
 
-// Endpoint to list all users
-app.get('/users', async (req, res) => {
+// Placeholder data instead of a database (for now)
+let users = [
+    { id: 1, name: 'John Doe', email: 'john@example.com' },
+    { id: 2, name: 'Jane Smith', email: 'jane@example.com' }
+];
+
+// Stub function to create users table
+async function createUsersTable() {
     try {
-        const result = await pool.query('SELECT * FROM users');
-        res.json(result.rows);
+        // TODO: Add SQL logic to create the users table in PostgreSQL
+        console.log("Creating users table...");
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
+        console.error("Error creating users table:", err);
     }
+}
+
+// Endpoint to list all users
+app.get('/users', (req, res) => {
+    res.json(users);
 });
 
 // Endpoint to add a new user
-app.post('/users', async (req, res) => {
+app.post('/users', (req, res) => {
     const { name, email } = req.body;
-    try {
-        const result = await pool.query('INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *', [name, email]);
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    const newUser = {
+        id: users.length + 1,
+        name,
+        email
+    };
+    users.push(newUser);
+    res.status(201).json(newUser);
 });
 
 // Endpoint to update a user
-app.put('/users/:id', async (req, res) => {
+app.put('/users/:id', (req, res) => {
     const { id } = req.params;
     const { name, email } = req.body;
-    try {
-        const result = await pool.query('UPDATE users SET name = $1, email = $2 WHERE id = $3 RETURNING *', [name, email, id]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('User not found');
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
+    const userIndex = users.findIndex(user => user.id === parseInt(id));
+
+    if (userIndex === -1) {
+        return res.status(404).send('User not found');
     }
+
+    users[userIndex] = { ...users[userIndex], name, email };
+    res.json(users[userIndex]);
 });
 
 // Endpoint to delete a user
-app.delete('/users/:id', async (req, res) => {
+app.delete('/users/:id', (req, res) => {
     const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM users WHERE id = $1 RETURNING *', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('User not found');
-        }
-        res.status(204).send();
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
+    const userIndex = users.findIndex(user => user.id === parseInt(id));
+
+    if (userIndex === -1) {
+        return res.status(404).send('User not found');
     }
+
+    users.splice(userIndex, 1);
+    res.status(204).send();
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+createUsersTable()
+    .then(() => app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`)));

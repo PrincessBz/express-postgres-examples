@@ -1,76 +1,70 @@
 const express = require('express');
-const { Pool } = require('pg');
 
 const app = express();
 const PORT = 3000;
 
-// PostgreSQL connection pool
-const pool = new Pool({
-    user: 'your_username',
-    host: 'localhost',
-    database: 'your_database',
-    password: 'your_password',
-    port: 5432,
-});
-
 // Middleware to parse JSON requests
 app.use(express.json());
 
-// Endpoint to list all products
-app.get('/products', async (req, res) => {
+// Placeholder data for products
+let products = [
+    { id: 1, name: 'Sample Product 1', price: 19.99 },
+    { id: 2, name: 'Sample Product 2', price: 29.99 }
+];
+
+// Stub function to create products table
+async function createProductsTable() {
     try {
-        const result = await pool.query('SELECT * FROM products');
-        res.json(result.rows);
+        // TODO: Add SQL logic to create the products table in PostgreSQL
+        console.log("Creating products table...");
     } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
+        console.error("Error creating users table:", err);
     }
+}
+
+// Endpoint to list all products
+app.get('/products', (req, res) => {
+    res.json(products);
 });
 
 // Endpoint to add a new product
-app.post('/products', async (req, res) => {
+app.post('/products', (req, res) => {
     const { name, price } = req.body;
-    try {
-        const result = await pool.query('INSERT INTO products (name, price) VALUES ($1, $2) RETURNING *', [name, price]);
-        res.status(201).json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
-    }
+    const newProduct = {
+        id: products.length + 1,
+        name,
+        price
+    };
+    products.push(newProduct);
+    res.status(201).json(newProduct);
 });
 
 // Endpoint to update a product
-app.put('/products/:id', async (req, res) => {
+app.put('/products/:id', (req, res) => {
     const { id } = req.params;
     const { name, price } = req.body;
-    try {
-        const result = await pool.query('UPDATE products SET name = $1, price = $2 WHERE id = $3 RETURNING *', [name, price, id]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('Product not found');
-        }
-        res.json(result.rows[0]);
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
+    const productIndex = products.findIndex(product => product.id === parseInt(id));
+
+    if (productIndex === -1) {
+        return res.status(404).send('Product not found');
     }
+
+    products[productIndex] = { ...products[productIndex], name, price };
+    res.json(products[productIndex]);
 });
 
 // Endpoint to delete a product
-app.delete('/products/:id', async (req, res) => {
+app.delete('/products/:id', (req, res) => {
     const { id } = req.params;
-    try {
-        const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING *', [id]);
-        if (result.rows.length === 0) {
-            return res.status(404).send('Product not found');
-        }
-        res.status(204).send();
-    } catch (err) {
-        console.error(err);
-        res.status(500).send('Server error');
+    const productIndex = products.findIndex(product => product.id === parseInt(id));
+
+    if (productIndex === -1) {
+        return res.status(404).send('Product not found');
     }
+
+    products.splice(productIndex, 1);
+    res.status(204).send();
 });
 
-// Start the server
-app.listen(PORT, () => {
-    console.log(`Server is running on http://localhost:${PORT}`);
-});
+createProductsTable()
+    .then(() => app.listen(PORT, () => console.log(`Server is running on http://localhost:${PORT}`)));
