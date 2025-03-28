@@ -1,7 +1,17 @@
 const express = require('express');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = 3000;
+
+
+const pool = new Pool({
+    user: 'postgres',
+    host: 'localhost',
+    database: 'postgres',
+    password: '1964',
+    port: 5432,
+});
 
 // Middleware to parse JSON requests
 app.use(express.json());
@@ -15,55 +25,104 @@ let products = [
 // Stub function to create products table
 async function createProductsTable() {
     try {
-        // TODO: Add SQL logic to create the products table in PostgreSQL
+        await pool.query(`
+        CREATE TABLE IF NOT EXISTS products (
+            id SERIAL PRIMARY KEY,
+            name TEXT NOT NULL,
+            price DECIMAL(10, 2) NOT NULL
+        
+        ); `);              
         console.log("Creating products table...");
     } catch (err) {
-        console.error("Error creating users table:", err);
+        console.error("Error creating products table:", err);
     }
 }
 
 // Endpoint to list all products
-app.get('/products', (req, res) => {
-    res.json(products);
+app.get('/products', async(req, res) => {
+    try {
+    const result = await pool.query('SELECT name, price FROM products;');
+    return res.json(result.rows);
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
 });
 
 // Endpoint to add a new product
-app.post('/products', (req, res) => {
+app.post('/products', async(req, res) => {
     const { name, price } = req.body;
-    const newProduct = {
-        id: products.length + 1,
-        name,
-        price
-    };
-    products.push(newProduct);
-    res.status(201).json(newProduct);
+
+    // Validate input
+    if (!name || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Name is required, and must be a non-empty string.' });
+    }
+
+    if (!price || price <= 0) {
+        return res.status(400).json({ error: 'Price is required, and must be a value greater than zero.' });
+    }
+
+    try{
+      const result = await pool.query(
+        `INSERT INTO products (name, price) VALUES ($1, $2) RETURNING *`,
+        [name, price]
+      );
+      return res.status(201).json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+  
 });
 
 // Endpoint to update a product
-app.put('/products/:id', (req, res) => {
+app.put('/products/:id', async(req, res) => {
     const { id } = req.params;
     const { name, price } = req.body;
-    const productIndex = products.findIndex(product => product.id === parseInt(id));
 
-    if (productIndex === -1) {
-        return res.status(404).send('Product not found');
+    if (!name || name.trim().length === 0) {
+        return res.status(400).json({ error: 'Name is required, and must be a non-empty string.' });
     }
 
-    products[productIndex] = { ...products[productIndex], name, price };
-    res.json(products[productIndex]);
+    if (!price || price <= 0) {
+        return res.status(400).json({ error: 'Price is required, and must be a value greater than zero.' });
+    }
+
+    try{
+   
+    const result = await pool.query(`UPDATE products SET name = $1, price = $2 WHERE id = $3 RETURNING *`, [name, price, id]);
+    if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Product not found with ID: ${id}' });
+    }
+    return res.json(result.rows[0]);
+    }
+    catch (err) {
+        console.error(err);
+        return res.status(500).json({ error: 'Internal server error' });
+    }
+
+    
 });
 
 // Endpoint to delete a product
-app.delete('/products/:id', (req, res) => {
+app.delete('/products/:id', async(req, res) => {
     const { id } = req.params;
-    const productIndex = products.findIndex(product => product.id === parseInt(id));
-
-    if (productIndex === -1) {
-        return res.status(404).send('Product not found');
+   try{
+    const result = await pool.query(
+        `DELETE FROM products WHERE id = $1 RETURNING *`, [id]);
+    if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Product not found with ID: ${id}' });
     }
-
-    products.splice(productIndex, 1);
-    res.status(204).send();
+    return res.json(result.rows[0]);
+   }
+   catch (err)
+   {
+       console.error(err);
+       return res.status(500).json({ error: 'Internal server error' });
+   }
+   res.status(204).send();
 });
 
 createProductsTable()
